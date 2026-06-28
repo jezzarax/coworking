@@ -8,13 +8,15 @@ dependencies = [
   "click>=8.4.1",
   "jinja2>=3.1.6",
   "openai>=2.41.1",
+  "pydantic>=2.13.4",
   "pydantic-ai>=2.0.0",
+  "ruamel-yaml>=0.19.1",
   "tenacity>=9.1.4",
   "tqdm>=4.68.3",
 ]
 
 [project.scripts]
-duc-tooling = "duc_tooling.main:main"
+cwrk = "coworking.main:main_grp"
 
 [dependency-groups]
 dev = [
