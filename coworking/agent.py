@@ -1,4 +1,5 @@
-import dataclasses
+from __future__ import annotations
+
 import logging
 import os
 import typing
@@ -7,9 +8,8 @@ import pydantic_ai
 import pydantic_graph
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.toolsets import FunctionToolset
 
-from coworking import agent_logging, config
+from coworking import agent_logging, config, structs, toolsets
 
 logger = logging.getLogger(__name__)
 
@@ -21,28 +21,6 @@ async def drive(run, name: str):
         if isinstance(node, pydantic_graph.End):
             break
         node = await run.next(node)
-
-
-@dataclasses.dataclass
-class Switchboard:
-    runs: dict[str, pydantic_ai.AgentRun] = dataclasses.field(default_factory=dict)
-
-    def send(self, from_: str, to: str, text: str) -> str:
-        run = self.runs.get(to)
-        if run is None:
-            return f"{to} is not connected"
-        # priority='asap' is the "steering" semantics: the message is added to
-        # the peer's next ModelRequest, or — if the peer was about to End —
-        # redirects it into one more request so it can't miss the message.
-        run.enqueue(f"[message from {from_}] {text}", priority="asap")
-        return "delivered"
-
-
-@dataclasses.dataclass
-class ChatDeps:
-    me: str
-    peers: list[str]
-    board: Switchboard
 
 
 def build_model_settings(
@@ -83,27 +61,46 @@ def build_agent(
     name: str,
     model: OpenAIChatModel,
     instruction: str,
-    *service_toolsets: FunctionToolset,
-) -> pydantic_ai.Agent[ChatDeps, str]:
+    report_board: toolsets.ReportBoard,
+    *service_toolsets: pydantic_ai.FunctionToolset,
+) -> pydantic_ai.Agent[structs.ChatDeps, str]:
     agent = pydantic_ai.Agent(
         model,
-        deps_type=ChatDeps,
+        deps_type=structs.ChatDeps,
         toolsets=list(service_toolsets),
         instructions=instruction,
     )
 
     @agent.tool
     def send_message(
-        ctx: pydantic_ai.RunContext[ChatDeps],
+        ctx: pydantic_ai.RunContext[structs.ChatDeps],
         text: str,
         to: str | None = None,
     ) -> str:
         """Send a message to a peer agent.
 
-        If ``to`` is omitted, the message is broadcast to every peer.
+        If ``to`` is omitted, the message is broadcast to every peer. Every
+        outbound message is recorded into ``ctx.deps.messages_sent`` (one
+        entry per recipient).
         """
-        targets = [to.lower()] if to else list(ctx.deps.peers)
+        targets = [to] if to else list(ctx.deps.peers)
         results = [ctx.deps.board.send(ctx.deps.me, target, text) for target in targets]
+        ctx.deps.messages_sent.extend(structs.MessageRecord(to=t, text=text) for t in targets)
         return "; ".join(results)
+
+    @agent.tool
+    def publish_report(
+        ctx: pydantic_ai.RunContext[structs.ChatDeps],
+        content: str,
+    ) -> str:
+        """Publish your final report on paper connections.
+
+        The team should coordinate (via ``send_message``) so that only one
+        agent publishes the consensus report. If you disagree with the
+        consensus, you may publish a separate dissenting report. Every call
+        is recorded.
+        """
+        record = report_board.publish(ctx.deps.me, content)
+        return f"report published by {record.author} ({len(report_board.reports)} total)"
 
     return agent

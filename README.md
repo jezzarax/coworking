@@ -76,13 +76,13 @@ uv run cwrk chatbox --model-alias my-model
 
 ## Setup
 
-Three agents — `alice`, `bob`, `carol` — run concurrently against the same model:
+Three agents — `Alice`, `Bob`, `Carol` — run concurrently against the same model:
 
 | Agent | Role                          |
 | ----- | ----------------------------- |
-| alice | explorer, peer of bob + carol |
-| bob   | explorer, peer of alice + carol |
-| carol | explorer, peer of alice + bob  |
+| Alice | explorer, peer of Bob + Carol |
+| Bob   | explorer, peer of Alice + Carol |
+| Carol | explorer, peer of Alice + Bob  |
 
 All three receive the same task instruction; each is told who its peers are so
 it can address them by name.
