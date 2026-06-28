@@ -14,10 +14,10 @@ from coworking import agent_logging, config
 logger = logging.getLogger(__name__)
 
 
-async def drive(run):
+async def drive(run, name: str):
     node = run.next_node
     while True:
-        agent_logging.log_agent_execution_node(logger, node)
+        agent_logging.log_agent_execution_node(logger.getChild(name), node)
         if isinstance(node, pydantic_graph.End):
             break
         node = await run.next(node)
@@ -27,21 +27,21 @@ async def drive(run):
 class Switchboard:
     runs: dict[str, pydantic_ai.AgentRun] = dataclasses.field(default_factory=dict)
 
-    def send(self, to: str, text: str) -> str:
+    def send(self, from_: str, to: str, text: str) -> str:
         run = self.runs.get(to)
         if run is None:
             return f"{to} is not connected"
         # priority='asap' is the "steering" semantics: the message is added to
         # the peer's next ModelRequest, or — if the peer was about to End —
         # redirects it into one more request so it can't miss the message.
-        run.enqueue(f"[message from {to}'s peer] {text}", priority="asap")
+        run.enqueue(f"[message from {from_}] {text}", priority="asap")
         return "delivered"
 
 
 @dataclasses.dataclass
 class ChatDeps:
     me: str
-    peer: str
+    peers: list[str]
     board: Switchboard
 
 
@@ -80,22 +80,30 @@ def build_model(parsed_config: config.LLMModelConfig) -> OpenAIChatModel:
 
 
 def build_agent(
-    name: str, model: OpenAIChatModel, *service_toolsets: FunctionToolset
+    name: str,
+    model: OpenAIChatModel,
+    instruction: str,
+    *service_toolsets: FunctionToolset,
 ) -> pydantic_ai.Agent[ChatDeps, str]:
     agent = pydantic_ai.Agent(
         model,
         deps_type=ChatDeps,
         toolsets=list(service_toolsets),
-        instructions=(
-            f"You are {name}. Work with your peer to drive the shared ledger "
-            "to exactly 100, then reply DONE and stop. Use send_message to "
-            "coordinate; deposit in turns so you don't overshoot."
-        ),
+        instructions=instruction,
     )
 
     @agent.tool
-    def send_message(ctx: pydantic_ai.RunContext[ChatDeps], text: str) -> str:
-        """Send a message to your peer agent."""
-        return ctx.deps.board.send(ctx.deps.peer, text)
+    def send_message(
+        ctx: pydantic_ai.RunContext[ChatDeps],
+        text: str,
+        to: str | None = None,
+    ) -> str:
+        """Send a message to a peer agent.
+
+        If ``to`` is omitted, the message is broadcast to every peer.
+        """
+        targets = [to.lower()] if to else list(ctx.deps.peers)
+        results = [ctx.deps.board.send(ctx.deps.me, target, text) for target in targets]
+        return "; ".join(results)
 
     return agent
