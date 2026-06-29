@@ -59,8 +59,19 @@ def _make_instruction(name: str, peers: list[str]) -> str:
     default="./data/papers",
     help="Directory containing paper markdown files.",
 )
+@click.option("--trace-recording/--no-trace-recording", is_flag=True, default=True)
+@click.option("--otlp-endpoint", type=str, envvar=util.OTEL_EXPORTER_OTLP_ENDPOINT_ENVVAR)
 @util.make_sync
-async def chatbox_sim(llm_config: pathlib.Path, model_alias: str, papers_dir: pathlib.Path) -> None:
+async def chatbox_sim(
+    llm_config: pathlib.Path,
+    model_alias: str,
+    papers_dir: pathlib.Path,
+    trace_recording: bool,
+    otlp_endpoint: str | None,
+) -> None:
+    if trace_recording:
+        util.init_trace_recording(otlp_endpoint)
+
     llm_configs = config.load_llm_config(llm_config)
     agentic_model = agent.build_model(llm_configs.models[model_alias])
 

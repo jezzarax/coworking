@@ -22,6 +22,7 @@ class LLMModelConfig(pydantic.BaseModel):
     concurrency: int = pydantic.Field(default=1, ge=1)
     max_tokens: int | None = pydantic.Field(default=16384, ge=1)
     temperature: float | None = None
+    timeout: int | None = None
     top_p: float | None = None
     presence_penalty: float | None = None
     extra_body: dict[str, typing.Any] = pydantic.Field(default_factory=dict)

@@ -1,6 +1,7 @@
 import logging
 
 import click
+from dotenv import load_dotenv
 
 from coworking import chatbox
 
@@ -8,6 +9,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s [line:%(lineno)d] %(message)s",
 )
+
+load_dotenv()
 
 
 @click.group

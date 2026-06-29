@@ -46,6 +46,7 @@ its `api_key_env` field. For the snippet above:
 
 ```sh
 OPENAI_API_KEY=sk-...
+STUB_KEY=sk-stub
 ```
 
 (The two `STUB_KEY` stubs just need any non-empty value to satisfy the loader.)
@@ -53,8 +54,26 @@ OPENAI_API_KEY=sk-...
 ### 3. Pick which entry drives the run
 
 The `--model-alias` flag selects the YAML entry that is used as the model for
-**all three agents**. There is no per-agent model selection — the whole team
+**all three agents**. There is no per-agent model selection - the whole team
 runs against the same endpoint.
+
+## Agentic Trace Recording
+
+Optional - if you want to capture structured traces of agent runs, you need an
+OTLP collector running before you start the harness.
+
+One option is to use [Vector](https://vector.dev/) as a local collector. A
+homelab-ready config is included at `./configs/vector_collector.yaml`:
+
+```sh
+vector -c ./configs/vector_collector.yaml
+```
+
+Then set the OTLP endpoint env var via export `export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` or .env (`cp template.env .env` and edit it) and run the pipeline as usual.
+
+Traces are written to `./data/traces/` in zstd-compressed JSONL format.
+
+I've published a [small post](https://jezzarax.github.io/vector-otlp-tracing/) about how to set up vector for collecting traces from Codex/Claude Code/Pydantic AI.
 
 ## Running
 
@@ -64,9 +83,9 @@ uv run cwrk chatbox
 
 Flags:
 
-- `--llm-config PATH` — YAML model config (default `./configs/chatbox_models.yaml`)
-- `--model-alias TEXT` — which YAML entry to use (default `qwen`)
-- `--papers-dir DIRECTORY` — paper corpus (default `./data/papers`)
+- `--llm-config PATH` - YAML model config (default `./configs/chatbox_models.yaml`)
+- `--model-alias TEXT` - which YAML entry to use (default `qwen`)
+- `--papers-dir DIRECTORY` - paper corpus (default `./data/papers`)
 
 Example using the `my-model` entry from above:
 
@@ -76,7 +95,7 @@ uv run cwrk chatbox --model-alias my-model
 
 ## Setup
 
-Three agents — `Alice`, `Bob`, `Carol` — run concurrently against the same model:
+Three agents - `Alice`, `Bob`, `Carol` - run concurrently against the same model:
 
 | Agent | Role                          |
 | ----- | ----------------------------- |
@@ -101,11 +120,11 @@ it can address them by name.
 ## Goal
 
 The `data/papers/` folder contains markdown extracts of publicly available
-papers. The selection is arbitrary for now — it's a small grab-bag rather than
-a curated corpus — and is expected to grow and change as the project evolves.
+papers. The selection is arbitrary for now - it's a small grab-bag rather than
+a curated corpus - and is expected to grow and change as the project evolves.
 
 Each agent independently explores `data/papers/` (15 markdown papers), records
 intermediate observations in its private Notebook, and coordinates with peers
-to identify how the papers are connected — shared topics, methods, datasets,
+to identify how the papers are connected - shared topics, methods, datasets,
 citations, contradictions, or evolution of ideas. The run ends with each agent
 replying with a concise synthesis of the connections it found.

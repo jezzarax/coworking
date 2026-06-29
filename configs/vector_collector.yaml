@@ -1,0 +1,18 @@
+sources:
+  otlp:
+    type: opentelemetry
+    grpc:
+      address: 0.0.0.0:4317
+    http:
+      address: 0.0.0.0:4318
+
+sinks:
+  file:
+    type: file
+    inputs: [otlp.logs, otlp.traces]
+    path: ./data/traces/vector-%Y-%m-%d.jsonl.zstd
+    compression: zstd
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited

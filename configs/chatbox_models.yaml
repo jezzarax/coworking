@@ -5,6 +5,7 @@ models:
     api_key_env: STUB_API_KEY
     concurrency: 3
     max_tokens: 16384
+    timeout: 300000
     extra_body:
       chat_template_kwargs:
         enable_thinking: true
@@ -18,6 +19,7 @@ models:
     temperature: 1.0
     top_p: 0.95
     presence_penalty: 1.5
+    timeout: 300000
     extra_body:
       top_k: 20
 

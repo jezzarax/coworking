@@ -4,8 +4,11 @@ import logging
 import os
 import typing
 
+import httpx
 import pydantic_ai
 import pydantic_graph
+import tenacity
+from pydantic_ai import retries
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -32,6 +35,8 @@ def build_model_settings(
         settings_config["max_tokens"] = parsed_config.max_tokens
     if parsed_config.temperature is not None:
         settings_config["temperature"] = parsed_config.temperature
+    if parsed_config.timeout is not None:
+        settings_config["timeout"] = parsed_config.timeout
     if parsed_config.top_p is not None:
         settings_config["top_p"] = parsed_config.top_p
     if parsed_config.presence_penalty is not None:
@@ -50,11 +55,41 @@ def build_model(parsed_config: config.LLMModelConfig) -> OpenAIChatModel:
 
     model_settings = build_model_settings(parsed_config)
 
-    model_config: dict[str, typing.Any] = {"provider": OpenAIProvider(**provider_config)}
+    http_client = create_retrying_client()
+
+    model_config: dict[str, typing.Any] = {
+        "provider": OpenAIProvider(http_client=http_client, **provider_config)
+    }
     if model_settings is not None:
         model_config["settings"] = model_settings
 
     return OpenAIChatModel(parsed_config.model_name, **model_config)
+
+
+def create_retrying_client():
+    """Create a client with smart retry handling for multiple error types."""
+
+    def should_retry_status(response):
+        """Raise exceptions for retryable HTTP status codes."""
+        if response.status_code in (429, 502, 503, 504):
+            response.raise_for_status()  # This will raise HTTPStatusError
+
+    transport = retries.AsyncTenacityTransport(
+        config=retries.RetryConfig(
+            # Retry on HTTP errors and connection issues
+            retry=tenacity.retry_if_exception_type((httpx.HTTPStatusError, ConnectionError)),
+            # Smart waiting: respects Retry-After headers, falls back to exponential backoff
+            wait=retries.wait_retry_after(
+                fallback_strategy=tenacity.wait_exponential(multiplier=1, max=60), max_wait=300
+            ),
+            # Stop after 5 attempts
+            stop=tenacity.stop_after_attempt(5),
+            # Re-raise the last exception if all retries fail
+            reraise=True,
+        ),
+        validate_response=should_retry_status,
+    )
+    return httpx.AsyncClient(transport=transport)
 
 
 def build_agent(
